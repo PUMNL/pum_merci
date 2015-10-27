@@ -1,0 +1,85 @@
+<?php
+
+function pum_merci_form_merci_reservation_node_form_alter(&$form, $form_state, $form_id) {
+  if ($form_id == 'merci_reservation_node_form') {
+    $form['field_other_people']['und']['add_more']['#value'] = t('Add another person');
+    $form['field_people_present']['und']['add_more']['#value'] = t('Add another person');
+    for($i=1; $i<= $form['choice_wrapper']['choice_count']['#value']; $i++) {
+      $form['choice_wrapper']['choice_'.$i]['merci_item_nid']['#required'] = true;
+    }
+    $form['actions']['submit']['#validate'][] = 'pum_merci_validate_node_form';
+    unset($form['override']);
+
+    $form['#attached']['js'] = array(
+      drupal_get_path('module', 'pum_merci') . '/disable_show_row_weights.js',
+    );
+  }
+}
+
+function pum_merci_validate_node_form($form, &$form_state) {
+  $items_pre_filled = 0;
+  for($i=1; $i <= $form_state['values']['choice_count']; $i++) {
+    if (!empty($form_state['values']['merci_reservation_items']['choice_'.$i]['merci_item_nid'])) {
+      $items_pre_filled++;
+    }
+  }
+  if ($items_pre_filled == 0) {
+    form_set_error('merci_reservation_items', t('Please select at least one item'));
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function pum_merci_permission() {
+  return array(
+    'cancel reservations' => array(
+      'title' => t('Allowed to cancel reservations'),
+    )
+  );
+}
+
+function pum_merci_menu() {
+  $items = array();
+  $items['portal/my-reservation/delete/%'] = array( //this creates a URL that will call this form at "examples/form-example"
+    'title' => t('Remove reservation'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pum_merci_delete', 3),
+    'access arguments' => array('cancel reservations'),
+  );
+  return $items;
+}
+
+function pum_merci_delete($form, &$form_state, $node_id) {
+  $form['node_id']['#type'] = 'hidden';
+  $form['node_id']['#name'] = 'node_id';
+  $form['node_id']['#value'] = $node_id;
+
+  $form['description']['#prefix'] = '<p>';
+  $form['description']['#suffix'] = '</p>';
+  $form['description']['#markup'] = t('Are you sure you want to cancel this reservation?');
+
+  $form['submit']['#type'] = 'submit';
+  $form['submit']['#value'] = t('Cancel reservation');
+
+  return $form;
+}
+
+function pum_merci_delete_submit($form, &$form_state) {
+  node_delete($form_state['values']['node_id']);
+  $form_state['redirect'] = 'portal/my-reservation';
+}
+
+function pum_merci_enable() {
+  $maxWeight = db_query("SELECT MAX(weight) FROM {system} where type = 'module' AND (name = 'merci' or name = 'merci_staff') ")->fetchField();
+  $maxWeight++;
+
+  //make sure that our module has a higher weight than the civicrm and civicrm_entity module
+  //if not our changes to the available fields for views wont occur
+  //because the hook should be runned after the civicrm and civcirm_entity has runned their relevant hooks
+  db_update('system')
+    ->fields(array('weight' => $maxWeight))
+    ->condition('type', 'module')
+    ->condition('name', 'pum_merci')
+    ->execute();
+}

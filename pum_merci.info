@@ -1,0 +1,7 @@
+name = PUM MERCI
+package = MERCI
+description = "PUM Managed Equipment Reservation Checkout and Inventory"
+
+core = 7.x
+
+dependencies[] = merci
